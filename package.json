@@ -8,6 +8,7 @@
     ],
     "scripts": {
         "build:niivue": "npm run build -w @niivue/niivue",
+        "build:static": "vite build --config packages/niivue/vite.static.config.ts",
         "build:docs": "npm run docs -w @niivue/niivue",
         "build:github": "npm run build:forTests -w @niivue/niivue",
         "build:docusaurus": "npm run build -w @niivue/docs",
