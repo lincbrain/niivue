@@ -102,6 +102,8 @@
       </div>
     </main>
 
+    <div id="layerList" style="margin-top: 10px;"></div>
+
     <footer>
       <label id="shaders">Shaders: </label>
     </footer>
@@ -115,6 +117,41 @@
         DRAG_MODE,
         SLICE_TYPE
       } from './niivue/index.ts'
+
+      function addLayerToUI(name, type) {
+        const layerList = document.getElementById('layerList');
+        const entry = document.createElement('div');
+        entry.style.marginTop = '5px';
+
+        const span = document.createElement('span');
+        span.textContent = name;
+        span.style.marginRight = '10px';
+
+        const btn = document.createElement('button');
+        btn.textContent = 'Remove';
+        btn.onclick = () => {
+          // Remove from UI
+          layerList.removeChild(entry);
+
+          if (type === 'volume') {
+            const volIndex = nv1.volumes.findIndex(v => v.name === name);
+            if (volIndex !== -1) {
+              nv1.volumes.splice(volIndex, 1);
+              nv1.updateGLVolume();
+            }
+          } else if (type === 'mesh') {
+            const meshIndex = nv1.meshes.findIndex(m => m.name === name);
+            if (meshIndex !== -1) {
+              nv1.meshes.splice(meshIndex, 1);
+              nv1.updateGLVolume();
+            }
+          }
+        };
+
+        entry.appendChild(span);
+        entry.appendChild(btn);
+        layerList.appendChild(entry);
+      }
 
       const showStatus = (msg, isError = false) => {
         const el = document.getElementById('statusMsg')
@@ -176,6 +213,7 @@
           }
 
           showStatus('Loaded successfully!');
+          addLayerToUI(filename, isTrk ? 'mesh' : 'volume');
           setTimeout(hideStatus, 2000);
         } catch (err) {
           console.error(err);
