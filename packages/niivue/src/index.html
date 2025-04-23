@@ -154,18 +154,34 @@
         s3InputWrapper.style.display = this.value === 's3' ? 'inline-block' : 'none'
       }
 
-      s3LoadBtn.onclick = async function () {
-        const url = s3UrlInput.value.trim()
-        if (!url) return showStatus('Please enter a valid S3 URL.', true)
+      s3LoadBtn.onclick = async function (e) {
+        e.preventDefault();
+        const url = s3UrlInput.value.trim();
+        if (!url) return showStatus('Please enter a valid S3 URL.', true);
+
         try {
-          showStatus('Loading from S3...')
-          await nv1.loadVolumes([{ url }])
-          showStatus('Loaded successfully!')
-          setTimeout(hideStatus, 2000)
+          showStatus('Loading from S3...');
+          const response = await fetch(url);
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const buffer = await response.arrayBuffer();
+
+          const filename = url.split('/').pop() || 'volume.nii.gz';
+          console.log(filename)
+          const isTrk = filename.toLowerCase().endsWith('.trk');
+
+          if (isTrk) {
+            await nv1.loadMeshes([{ data: buffer, name: filename, url: url }]);
+          } else {
+            await nv1.loadVolumes([{ data: buffer, name: filename, url: url }]);
+          }
+
+          showStatus('Loaded successfully!');
+          setTimeout(hideStatus, 2000);
         } catch (err) {
-          showStatus('Failed to load S3 asset: ' + err.message, true)
+          console.error(err);
+          showStatus('Failed to load S3 asset: ' + err.message, true);
         }
-      }
+      };
 
       const nv1 = new Niivue({
         backColor: [0, 0, 0, 1],
@@ -179,15 +195,15 @@
       await nv1.attachToCanvas(gl1)
       nv1.opts.multiplanarShowRender = SHOW_RENDER.AUTO
       nv1.opts.yoke3Dto2DZoom = true
-      await nv1.loadVolumes([{ url: '../demos/images/mni152.nii.gz' }])
-      await nv1.loadMeshes([{ url: '../demos/images/tract.SLF1_R.tck', layers: [{ url: '../demos/images/mni152.SLF1_R.tsf' }] }])
-      nv1.setMeshProperty(nv1.meshes[0].id, 'fiberColor', 'DPV0')
-      nv1.setMeshProperty(nv1.meshes[0].id, 'fiberDither', 0)
-      nv1.setMeshProperty(nv1.meshes[0].id, 'fiberRadius', 0.5)
-      nv1.setMeshProperty(nv1.meshes[0].id, 'rgba255', [0, 255, 255, 255])
-      nv1.setMeshShader(nv1.meshes[0].id, 'diffuse')
-      nv1.setSelectionBoxColor([0, 1, 0, 0.5])
-      nv1.setClipPlane([0.2, 0, 120])
+      // await nv1.loadVolumes([{ url: '../demos/images/mni152.nii.gz' }])
+      // await nv1.loadMeshes([{ url: '../demos/images/tract.SLF1_R.tck', layers: [{ url: '../demos/images/mni152.SLF1_R.tsf' }] }])
+      // nv1.setMeshProperty(nv1.meshes[0].id, 'fiberColor', 'DPV0')
+      // nv1.setMeshProperty(nv1.meshes[0].id, 'fiberDither', 0)
+      // nv1.setMeshProperty(nv1.meshes[0].id, 'fiberRadius', 0.5)
+      // nv1.setMeshProperty(nv1.meshes[0].id, 'rgba255', [0, 255, 255, 255])
+      // nv1.setMeshShader(nv1.meshes[0].id, 'diffuse')
+      // nv1.setSelectionBoxColor([0, 1, 0, 0.5])
+      // nv1.setClipPlane([0.2, 0, 120])
 
       const layoutSelect = document.getElementById('layoutSelect')
       layoutSelect.onchange = function () {

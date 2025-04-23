@@ -253,7 +253,7 @@ export const DEFAULT_OPTIONS: NVConfigOptions = {
   isV1SliceShader: false,
   forceDevicePixelRatio: 0,
   logLevel: 'info',
-  loadingText: 'loading ...',
+  loadingText: 'Choose an image/mesh source...',
   isForceMouseClickToVoxelCenters: false,
   dragAndDropEnabled: true,
   drawingEnabled: false,
