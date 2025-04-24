@@ -7,13 +7,44 @@
     <title>NiiVue</title>
     <link rel="stylesheet" href="niivue.css" />
     <link rel="icon" href="data:;base64,iVBORw0KGgo=" />
+    <style>
+      #statusMsg {
+        position: fixed;
+        top: 10px;
+        right: 10px;
+        background: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 10px;
+        border-radius: 6px;
+        z-index: 9999;
+        display: none;
+      }
+    </style>
   </head>
   <body>
-    <noscript>
-      <strong>niivue requires JavaScript.</strong>
-    </noscript>
+    <noscript><strong>niivue requires JavaScript.</strong></noscript>
+
     <header>
-      <button id="openBtn">Choose an image or mesh with a dialog</button>
+      <div style="display: inline-block; margin-right: 10px;">
+        <label for="dataSourceSelect">Choose image/mesh source:</label>
+        <select id="dataSourceSelect">
+          <option value="">-- Select --</option>
+          <option value="local" >Local File</option>
+          <option value="remote">Remote</option>
+        </select>
+
+        <select id="remoteSourceSelect" style="display:none; margin-left: 10px;">
+          <option value="">-- Select Remote Source --</option>
+          <option value="s3">AWS S3</option>
+        </select>
+
+        <div id="s3InputWrapper" style="display:none; margin-top: 5px;">
+          <input type="text" id="s3UrlInput" placeholder="Enter AWS S3 URL" style="width: 300px;" />
+          <button id="s3LoadBtn">Load</button>
+        </div>
+      </div>
+
+      <!-- Restored Controls -->
       <label for="fiberRadius">Radius</label>
       <input type="range" min="0" max="20" value="5" class="slider" id="fiberRadius" />
       <label for="fiberDitherSlider">Dither</label>
@@ -58,55 +89,185 @@
       <label for="equalCheck">EqualSize</label>
       <input type="checkbox" id="equalCheck" checked />
       <label for="cornerCheck">CornerText</label>
-      <input type="checkbox" id="cornerCheck" unchecked />
+      <input type="checkbox" id="cornerCheck" />
       <label for="marginCheck">TileMargin</label>
-      <input type="checkbox" id="marginCheck" unchecked />
+      <input type="checkbox" id="marginCheck" />
       <label for="heroSlider">Hero Image</label>
       <input type="range" min="0" max="9" value="0" class="slider" id="heroSlider" />
     </header>
+
     <main id="canvas-container">
       <div style="display: flex; width: 100%; height: 100%">
         <canvas id="gl1"></canvas>
       </div>
     </main>
+
+    <div id="layerList" style="margin-top: 10px;"></div>
+
     <footer>
       <label id="shaders">Shaders: </label>
     </footer>
+
+    <div id="statusMsg"></div>
+
     <script type="module" async>
-      import { Niivue, NVImage, NVMesh, NVMeshLoaders, SHOW_RENDER, DRAG_MODE, SLICE_TYPE } from './niivue/index.ts'
-      async function addVolumeFromFiles(f) {
-        console.log('attempting to open ', f[0].name)
-        console.log('details', f[0])
-        nv1.loadFromFile(f[0])
-      }
-      openBtn.onclick = function () {
-        let input = document.createElement('input')
-        input.style.display = 'none'
-        input.type = 'file'
-        document.body.appendChild(input)
-        input.onchange = function (event) {
-          addVolumeFromFiles(event.target.files)
-        }
-        input.click()
-      }
-      fiberRadius.oninput = function () {
-        nv1.setMeshProperty(nv1.meshes[0].id, 'fiberRadius', this.value * 0.1)
-        nv1.updateGLVolume()
-      }
-      fiberColor.onchange = function () {
-        nv1.setMeshProperty(nv1.meshes[0].id, 'fiberColor', this.value)
-      }
-      fiberColormap.onchange = function () {
-        nv1.setMeshProperty(nv1.meshes[0].id, 'colormap', this.value)
+      import {
+        Niivue,
+        SHOW_RENDER,
+        DRAG_MODE,
+        SLICE_TYPE
+      } from './niivue/index.ts'
+      
+      // let focusedLayer = null;
+
+      function addLayerToUI(name, type) {
+        const layerList = document.getElementById('layerList');
+        const entry = document.createElement('div');
+        entry.style.marginTop = '5px';
+
+        const span = document.createElement('span');
+        span.textContent = name;
+        span.style.marginRight = '10px';
+
+        // const toggle = document.createElement('input');
+        // toggle.type = 'checkbox';
+        // toggle.title = 'Toggle Focus';
+        // toggle.style.marginRight = '10px';
+
+        // toggle.onchange = () => {
+        //   // Uncheck all other checkboxes
+        //   document.querySelectorAll('#layerList input[type="checkbox"]').forEach(cb => {
+        //     if (cb !== toggle) cb.checked = false;
+        //   });
+
+        //   // Set focused layer
+        //   focusedLayer = toggle.checked ? { name, type } : null;
+        //   console.log('Focused layer is now:', focusedLayer);
+        // };
+
+        const btn = document.createElement('button');
+        btn.textContent = 'Remove';
+        btn.onclick = () => {
+          // Remove from UI
+          layerList.removeChild(entry);
+
+          if (type === 'volume') {
+            const volIndex = nv1.volumes.findIndex(v => v.name === name);
+            if (volIndex !== -1) {
+              nv1.volumes.splice(volIndex, 1);
+              nv1.updateGLVolume();
+            }
+          } else if (type === 'mesh') {
+            const meshIndex = nv1.meshes.findIndex(m => m.name === name);
+            if (meshIndex !== -1) {
+              nv1.meshes.splice(meshIndex, 1);
+              nv1.updateGLVolume();
+            }
+          }
+
+        //   if (focusedLayer && focusedLayer.name === name) {
+        //     focusedLayer = null;
+        //   }
+        // };
+
+        entry.appendChild(span);
+        // entry.appendChild(toggle);
+        entry.appendChild(btn);
+        layerList.appendChild(entry);
       }
 
-      fiberDitherSlider.oninput = function () {
-        nv1.setMeshProperty(nv1.meshes[0].id, 'fiberDither', this.value * 0.1)
+      const showStatus = (msg, isError = false) => {
+        const el = document.getElementById('statusMsg')
+        el.innerText = msg
+        el.style.backgroundColor = isError ? 'rgba(255, 0, 0, 0.8)' : 'rgba(0, 0, 0, 0.8)'
+        el.style.display = 'block'
       }
-      fiberCalMin.oninput = function () {
-        nv1.meshes[0].dpv[0].cal_min = this.value * 1 //*1 converts string to number
-        nv1.setMeshProperty(nv1.meshes[0].id, 'colormap', fiberColormap.value)
+      const hideStatus = () => {
+        document.getElementById('statusMsg').style.display = 'none'
       }
+
+      async function addVolumeFromFiles(f) {
+        console.log('attempting to open ', f[0].name)
+        nv1.loadFromFile(f[0])
+      }
+
+      const dataSourceSelect = document.getElementById('dataSourceSelect')
+      const remoteSourceSelect = document.getElementById('remoteSourceSelect')
+      const s3InputWrapper = document.getElementById('s3InputWrapper')
+      const s3UrlInput = document.getElementById('s3UrlInput')
+      const s3LoadBtn = document.getElementById('s3LoadBtn')
+
+      dataSourceSelect.onchange = function () {
+        remoteSourceSelect.style.display = this.value === 'remote' ? 'inline-block' : 'none'
+        s3InputWrapper.style.display = 'none'
+        if (this.value === 'local') {
+          let input = document.createElement('input')
+          input.type = 'file'
+          input.style.display = 'none'
+          document.body.appendChild(input)
+          input.onchange = e => addVolumeFromFiles(e.target.files)
+          input.click()
+        }
+      }
+
+      remoteSourceSelect.onchange = function () {
+        s3InputWrapper.style.display = this.value === 's3' ? 'inline-block' : 'none'
+      }
+
+      s3LoadBtn.onclick = async function (e) {
+        e.preventDefault();
+        const url = s3UrlInput.value.trim();
+        if (!url) return showStatus('Please enter a valid S3 URL.', true);
+
+        try {
+          showStatus('Loading from S3...');
+          const response = await fetch(url);
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const buffer = await response.arrayBuffer();
+
+          const filename = url.split('/').pop() || 'volume.nii.gz';
+          console.log(filename)
+          const isTrk = filename.toLowerCase().endsWith('.trk');
+
+          if (isTrk) {
+            await nv1.loadMeshes([{ data: buffer, name: filename, url: url }]);
+          } else {
+            await nv1.loadVolumes([{ data: buffer, name: filename, url: url }]);
+          }
+
+          showStatus('Loaded successfully!');
+          addLayerToUI(filename, isTrk ? 'mesh' : 'volume');
+          setTimeout(hideStatus, 2000);
+        } catch (err) {
+          console.error(err);
+          showStatus('Failed to load S3 asset: ' + err.message, true);
+        }
+      };
+
+      const nv1 = new Niivue({
+        backColor: [0, 0, 0, 1],
+        show3Dcrosshair: true,
+        loglevel: 'debug',
+        isRuler: true,
+        dragMode: DRAG_MODE.measurement,
+        showMeasureUnits: true,
+        isColorbar: true
+      })
+      await nv1.attachToCanvas(gl1)
+      nv1.opts.multiplanarShowRender = SHOW_RENDER.AUTO
+      nv1.opts.yoke3Dto2DZoom = true
+      // await nv1.addVolumeFromFiles()
+      // await nv1.loadVolumes([{ url: '../demos/images/mni152.nii.gz' }])
+      // await nv1.loadMeshes([{ url: '../demos/images/tract.SLF1_R.tck', layers: [{ url: '../demos/images/mni152.SLF1_R.tsf' }] }])
+      // nv1.setMeshProperty(nv1.meshes[0].id, 'fiberColor', 'DPV0')
+      // nv1.setMeshProperty(nv1.meshes[0].id, 'fiberDither', 0)
+      // nv1.setMeshProperty(nv1.meshes[0].id, 'fiberRadius', 0.5)
+      // nv1.setMeshProperty(nv1.meshes[0].id, 'rgba255', [0, 255, 255, 255])
+      // nv1.setMeshShader(nv1.meshes[0].id, 'diffuse')
+      // nv1.setSelectionBoxColor([0, 1, 0, 0.5])
+      // nv1.setClipPlane([0.2, 0, 120])
+
+      const layoutSelect = document.getElementById('layoutSelect')
       layoutSelect.onchange = function () {
         nv1.setMultiplanarLayout(Number(this.value))
       }
@@ -123,119 +284,39 @@
         nv1.drawScene()
       }
       cornerCheck.onchange = function () {
-        //nv1.opts.isCornerOrientationText = this.checked\
         nv1.setCornerOrientationText(this.checked)
+      }
+      fiberRadius.oninput = function () {
+        nv1.setMeshProperty(nv1.meshes[0].id, 'fiberRadius', this.value * 0.1)
+        nv1.updateGLVolume()
+      }
+      fiberColor.onchange = function () {
+        nv1.setMeshProperty(nv1.meshes[0].id, 'fiberColor', this.value)
+      }
+      fiberColormap.onchange = function () {
+        nv1.setMeshProperty(nv1.meshes[0].id, 'colormap', this.value)
+      }
+      fiberDitherSlider.oninput = function () {
+        nv1.setMeshProperty(nv1.meshes[0].id, 'fiberDither', this.value * 0.1)
+      }
+      fiberCalMin.oninput = function () {
+        nv1.meshes[0].dpv[0].cal_min = this.value * 1
+        nv1.setMeshProperty(nv1.meshes[0].id, 'colormap', fiberColormap.value)
       }
       heroSlider.oninput = function () {
         nv1.setHeroImage(this.value * 0.1)
       }
       sliceType.onchange = function () {
-        let st = parseInt(document.getElementById('sliceType').value)
-        nv1.setSliceType(st)
-      }
-      var volumeList1 = [{ url: '../demos/images/mni152.nii.gz' }]
-
-      // with roiSelect, show the stats from the ROI in a temporary div
-      const onDragRelease = (data) => {
-        // if there is a div with the id dragReleaseDiv, remove it
-        const divToRemove = document.getElementById('dragReleaseDiv')
-        if (divToRemove) {
-          divToRemove.remove()
-        }
-
-        console.log('drag release', data)
-        let obj = nv1.getDescriptives({
-          layer: 0,
-          startVox: data.voxStart,
-          endVox: data.voxEnd,
-          roiIsMask: true
-        })
-        console.log(obj)
-        // get dpr
-        const dpr = window.devicePixelRatio
-        // get mouse x,y. Divide by dpr to get the correct position
-        const x = nv1.uiData.dragEnd[0] / dpr
-        const y = nv1.uiData.dragEnd[1] / dpr
-        console.log(x, y)
-        const pad = 1
-        const div = document.createElement('div')
-        // set id for removal on the next pass
-        div.id = 'dragReleaseDiv'
-        div.style.color = 'red'
-        div.style.position = 'absolute'
-        div.style.backgroundColor = 'black'
-        div.style.opacity = 0.8
-        div.style.padding = '5px'
-        // set z-index to be well above the canvas
-        div.style.zIndex = 1000
-        div.innerHTML = `Mean: ${obj.mean}<br>Area: ${obj.area}<br>Stdev: ${obj.stdev}`
-        // set position to be at the mouse x,y relative to the canvas
-        div.style.left = x + pad + 'px'
-        div.style.top = y + pad + 'px'
-        // get the canvas element reference from niivue
-        const canvas = nv1.gl.canvas
-        // niivue should always be in a container, so get the parent of the canvas
-        const parentDiv = canvas.parentElement
-        parentDiv.appendChild(div)
+        nv1.setSliceType(parseInt(this.value))
       }
 
-      const onLocationChange = (data) => {
-        // remove the stats div if it exists when the user clicks away
-        const divToRemove = document.getElementById('dragReleaseDiv')
-        if (divToRemove) {
-          divToRemove.remove()
-        }
-      }
-      let defaults = {
-        // backColor: [0, 0.2, 0.4, 1],
-        backColor: [0, 0, 0, 1],
-        show3Dcrosshair: true,
-        loglevel: 'debug',
-        isRuler: true,
-        dragMode: DRAG_MODE.measurement,
-        // onDragRelease: onDragRelease,
-        onLocationChange: onLocationChange,
-        measureTextJustify: 'start',
-        showMeasureUnits: true,
-        measureTextColor: [0, 1, 0, 1],
-        measureLineColor: [1, 0, 0, 1],
-        measureTextHeight: 0.04,
-        isColorbar: true
-      }
-      var nv1 = new Niivue(defaults)
-      await nv1.attachToCanvas(gl1)
-      // multiplanarShowRender is the preferred option now,
-      // but multiplanarForceRender is still available for backwards compatibility
-      // previous use was: nv1.opts.multiplanarForceRender = true;
-      nv1.opts.multiplanarShowRender = SHOW_RENDER.AUTO
-      nv1.opts.yoke3Dto2DZoom = true
-      await nv1.loadVolumes(volumeList1)
-      var layerList = [{ url: '../demos/images/mni152.SLF1_R.tsf' }]
-      await nv1.loadMeshes([{ url: '../demos/images/tract.SLF1_R.tck', layers: layerList }])
-      nv1.setMeshProperty(nv1.meshes[0].id, 'fiberColor', 'DPV0')
-      nv1.setMeshProperty(nv1.meshes[0].id, 'fiberDither', 0)
-      nv1.setMeshProperty(nv1.meshes[0].id, 'fiberRadius', 0.5)
-      nv1.setMeshProperty(nv1.meshes[0].id, 'rgba255', [0, 255, 255, 255]) //color for fixed
-      nv1.setMeshShader(nv1.meshes[0].id, 'diffuse')
-      console.log('fiber vertex intensity range:', nv1.meshes[0].dpv[0].global_min, nv1.meshes[0].dpv[0].global_max)
-      nv1.setSelectionBoxColor([0, 1, 0, 0.5])
-      nv1.setClipPlane([0.2, 0, 120])
-
-      // Layout format: {sliceType: SLICE_TYPE, position: [left, top, width, height]}
-      // Units are relative (0-1) to canvas size
       const customLayout = [
-        // Left 50% - Sag
         { sliceType: SLICE_TYPE.SAGITTAL, position: [0, 0, 0.5, 1.0] },
-        // Top right - Cor
         { sliceType: SLICE_TYPE.CORONAL, position: [0.5, 0, 0.5, 0.5] },
-        // Bottom right - Ax
         { sliceType: SLICE_TYPE.AXIAL, position: [0.5, 0.5, 0.5, 0.5] }
       ]
-
-      // Apply the custom layout
       nv1.setCustomLayout(customLayout)
 
-      // toggle button for custom layout
       const layoutToggle = document.createElement('button')
       layoutToggle.innerHTML = 'Toggle Custom Layout'
       layoutToggle.style.margin = '0 5px'
@@ -243,7 +324,7 @@
       layoutToggle.onclick = function () {
         if (isCustomLayout) {
           nv1.clearCustomLayout()
-          nv1.setSliceType(3) // Set back to multiplanar
+          nv1.setSliceType(3)
           this.innerHTML = 'Use Custom Layout'
         } else {
           nv1.setCustomLayout(customLayout)
@@ -253,17 +334,14 @@
       }
       document.getElementById('shaders').parentNode.insertBefore(layoutToggle, document.getElementById('shaders'))
 
-      let cmaps = nv1.meshShaderNames()
-      let cmapEl = document.getElementById('shaders')
-      for (let i = 0; i < cmaps.length; i++) {
-        let btn = document.createElement('button')
-        btn.innerHTML = cmaps[i]
-        btn.onclick = function () {
-          nv1.setMeshShader(nv1.meshes[0].id, cmaps[i])
-        }
+      const cmaps = nv1.meshShaderNames()
+      const cmapEl = document.getElementById('shaders')
+      for (const name of cmaps) {
+        const btn = document.createElement('button')
+        btn.innerText = name
+        btn.onclick = () => nv1.setMeshShader(nv1.meshes[0].id, name)
         cmapEl.appendChild(btn)
       }
-      equalCheck.onchange()
     </script>
   </body>
 </html>
